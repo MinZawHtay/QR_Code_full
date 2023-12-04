@@ -10,6 +10,12 @@ import re
 import csv
 pictures_folder = Path.home() / "Pictures"
 folder_path = fr'{pictures_folder}\qrcode_folder\Personal Information'
+os.makedirs(folder_path, exist_ok=True)
+csv_file = os.path.join(folder_path, "Personal Information.csv")
+if not os.path.isfile(csv_file):
+        with open(csv_file, mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Name", "Title", "Phone", "Email", "Company Name", "Company Address"])
 def generate_vcard_qrcode(person_details, company_info, latitude, longitude, filename):
     vcard_data = f"BEGIN:VCARD\n" \
                  f"VERSION:3.0\n" \
@@ -31,8 +37,26 @@ def generate_vcard_qrcode(person_details, company_info, latitude, longitude, fil
     qr.make(fit=True)
     qr_code_img = qr.make_image(fill_color='black', back_color="white")
     qr_code_img = qr_code_img.resize((300, 300))  # Resize the image
-    tk_qr_image = ImageTk.PhotoImage(qr_code_img)
     
+    #  Create a PhotoImage object from the QR code image
+    # qr_code_image = Image.open(filename)
+    # qr_code_image = ImageTk.PhotoImage(qr_code_image)
+
+    # Update the qr_label with the new QR code image
+    # qr_label.config(image=qr_code_image)
+    # qr_label.image = qr_code_image  # Keep a reference to the image to prevent it from being garbage collected
+    
+    logo = Image.open(r"D:\Python project\QR-Code\eagle-logo.jpg")  # Replace with the path to your logo image
+    logo = logo.resize((60, 60))  # Adjust the size as needed
+
+    # Calculate the position to paste the logo in the center
+    qr_width, qr_height = qr_code_img.size
+    logo_width, logo_height = logo.size
+    position = ((qr_width - logo_width) // 2, (qr_height - logo_height) // 2)
+
+    # Paste the logo onto the QR code
+    qr_code_img.paste(logo, position)
+    tk_qr_image = ImageTk.PhotoImage(qr_code_img)
     qr_label.config(image=tk_qr_image)
     qr_label.image = tk_qr_image
 
@@ -72,33 +96,81 @@ def generate_qr_code():
     latitude = 16.774722  # Example latitude (decimal format)
     longitude = 96.167667
     pictures_folder = Path.home() / "Pictures"
-    folder_path = fr'{pictures_folder}\qrcode_folder'
+    folder_path = fr'{pictures_folder}\qrcode_folder\Personal Information'
 
     filename = f'{person_details["first_name"]}.png'
     qr_code_filename = os.path.join(folder_path, filename)
 
-    
-
-    # Check if the QR code with the same name already exists
-    if os.path.exists(qr_code_filename):
-        answer = tk.messagebox.askquestion("QR Code Exists", "Do you want to replace your QR code?")
-        if answer == 'yes':
-            os.replace(qr_code_filename,qr_code_filename)
-        else:
-            result_label.config(text='Enter another name!')
-            return
-    # Save person_details and company_info to a CSV file
+    # Read the existing CSV file to check if the person's name and phone are already present
     csv_file = os.path.join(folder_path, "Personal Information.csv")
-    with open(csv_file, mode="a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([person_details["first_name"], person_details["title"], person_details["phone"], person_details["email"],
-                         company_info["name"], company_info["address"]])
-  
-    qr_code_filename = generate_vcard_qrcode(person_details, company_info, latitude, longitude, folder_path)
-    result_label.config(text='QR Code generated!')
-    spt.config(text=f"Photo Path : {qr_code_filename}")
-    # image = Image.open(qr_code_filename)
-    # image.show()
+    person_exists = False
+
+    # Keep track of the index of the existing entry for updating
+    existing_entry_index = None
+
+    with open(csv_file, mode="r", newline="") as file:
+        reader = csv.reader(file)
+        for i, row in enumerate(reader):
+            if row and row[0].lower() == person_name.lower() and row[2] == person_phone:
+                person_exists = True
+                existing_entry_index = i
+                break
+
+    if person_exists:
+        # Update the existing entry in the CSV file
+        with open(csv_file, mode="r", newline="") as file:
+            lines = file.readlines()
+            lines[existing_entry_index] = [
+                person_details["first_name"], person_details["title"], person_details["phone"], person_details["email"],
+                company_info["name"], company_info["address"]
+            ]
+
+        with open(csv_file, mode="w", newline="") as file:
+            file.writelines(lines)
+
+        # Regenerate the QR code
+        qr_code_filename = generate_vcard_qrcode(person_details, company_info, latitude, longitude, folder_path)
+        result_label.config(text='CSV and QR Code updated!')
+        spt.config(text=f"Photo Path : {qr_code_filename}")
+
+    else:
+    # Find the row with the existing person's details
+        existing_row = None
+    with open(csv_file, mode="r", newline="") as file:
+        reader = csv.reader(file)
+        for row in reader:
+            if row and row[0].lower() == person_name.lower() and row[2] == person_phone:
+                existing_row = row
+                break
+
+    if existing_row:
+        # Update the CSV file with the new details
+        existing_row[1] = person_details["title"]
+        existing_row[3] = person_details["email"]
+        existing_row[4] = company_info["name"]
+        existing_row[5] = company_info["address"]
+
+        with open(csv_file, mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Name", "Title", "Phone", "Email", "Company Name", "Company Address"])  # Write header
+            writer.writerows(existing_row for existing_row in existing_row if existing_row)
+
+        # Generate a new QR code
+        qr_code_filename = generate_vcard_qrcode(person_details, company_info, latitude, longitude, folder_path)
+        result_label.config(text='CSV and QR Code updated!')
+        spt.config(text=f"Photo Path : {qr_code_filename}")
+    else:
+        # Write a new entry to the CSV file
+        with open(csv_file, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow([person_details["first_name"], person_details["title"], person_details["phone"], person_details["email"],
+                            company_info["name"], company_info["address"]])
+
+        # Generate a new QR code
+        qr_code_filename = generate_vcard_qrcode(person_details, company_info, latitude, longitude, folder_path)
+        result_label.config(text='QR Code generated!')
+        spt.config(text=f"Photo Path : {qr_code_filename}")
+
 
     # Clear the text entry widgets
     name_entry.delete(0, tk.END)
@@ -108,10 +180,37 @@ def generate_qr_code():
     company_name_entry.delete(0, tk.END)
     company_address_entry.delete(0, tk.END)
 
+
+# def view_qr_code():
+#     person_name = name_entry.get().title()
+#     qr_code_filename = os.path.join(folder_path, f'{person_name}.png')
+
+#     if os.path.exists(qr_code_filename):
+#         qr_image = ImageTk.PhotoImage(Image.open(qr_code_filename))
+#         qr_label.configure(image=qr_image)
+#         qr_label.image = qr_image
+#     else:
+#         result_label.config(text='QR Code does not exist!')
+#     spt.config(text=f"Photo Path : {qr_code_filename}")
+
+# def update_qr_code():
+#     person_name = name_entry.get().title()
+#     qr_code_filename = os.path.join(folder_path, f'{person_name}.png')
+#     os.replace(qr_code_filename,qr_code_filename)
+#     if os.path.exists(qr_code_filename):
+        
+#         qr_image = ImageTk.PhotoImage(Image.open(qr_code_filename))
+#         qr_label.configure(image=qr_image)
+#         qr_label.image = qr_image
+#         # Check if the person's name already exists in the CSV file
+        
+#     else:
+#         result_label.config(text='QR Code does not exist!')
+#         return
 # Create the main window
 window = tk.Tk()
 window.title("QR Code Generator")
-
+window.iconbitmap(r"D:\Python project\QR-Code\1.ico")
 # Create the input fields
 name_label = tk.Label(window, text="Name:")
 name_entry = tk.Entry(window)
@@ -152,8 +251,16 @@ result_label = tk.Label(window, text="")
 result_label.grid(row=7, column=0, columnspan=2, padx=5, pady=5)
 
 spt= tk.Label(window, text="")
-spt.grid(row=8, column=0, columnspan=2, padx=5, pady=5)
+spt.grid(row=9, column=0, columnspan=2, padx=5, pady=5)
 qr_label = ttk.Label(window)
-qr_label.grid(row=9, column=0, columnspan=2, padx=5, pady=5)
+qr_label.grid(row=8, column=0, columnspan=2, padx=5, pady=5)
+
+# view_qr_code_button = ttk.Button(window, text="View QR Code", command=view_qr_code)
+# view_qr_code_button.grid(row=10, column=0, columnspan=2, padx=5, pady=5)
+
+# # Create the "Update QR Code" button
+# update_button = ttk.Button(window, text="Update QR Code", command=update_qr_code)
+# update_button.grid(row=11, column=0, columnspan=2, padx=5, pady=5)
+
 # Run the main event loop
 window.mainloop()
